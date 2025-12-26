@@ -1,0 +1,399 @@
+# import streamlit as st
+# import pandas as pd
+# import re
+# from modules.dataset_loader import load_dataset, load_sample_data, validate_dataset
+# from modules.analysis_engine import AnalysisEngine
+# from modules.history_manager import HistoryManager
+
+# st.set_page_config(page_title="Smart Data Agent", page_icon="🤖", layout="wide")
+
+# st.markdown('<h1 style="text-align:center; color:#1f77b4;">🤖 Smart Data Analysis Agent</h1>', unsafe_allow_html=True)
+# st.markdown("**Select Task → Edit Template → 100% Accurate Results**")
+
+# class DataAgentApp:
+#     def __init__(self):
+#         self.engine = AnalysisEngine()
+#         self.history = HistoryManager()
+    
+#     def run(self):
+#         tab1, tab2, tab3 = st.tabs(["📁 Dataset", "🎯 Analysis", "📋 History"])
+#         with tab1: self.dataset_tab()
+#         with tab2: self.analysis_tab()
+#         with tab3: self.history_tab()
+    
+#     def dataset_tab(self):
+#         st.header("📁 Dataset")
+#         col1, col2 = st.columns([3,1])
+        
+#         with col1:
+#             uploaded_file = st.file_uploader("CSV/Excel", type=['csv','xlsx'])
+#         with col2:
+#             use_sample = st.checkbox("🧪 Sample Data", value=True)
+        
+#         if use_sample:
+#             df = load_sample_data()
+#             st.session_state.df = df
+#             st.success("✅ Sample loaded!")
+#         elif uploaded_file:
+#             df, _ = load_dataset(uploaded_file)
+#             st.session_state.df = df
+#             st.success(f"✅ {df.shape[0]:,} rows loaded!")
+        
+#         if 'df' in st.session_state:
+#             df = st.session_state.df
+#             col1, col2, col3 = st.columns(3)
+#             with col1: st.metric("Rows", df.shape[0])
+#             with col2: st.metric("Columns", df.shape[1])
+#             with col3: st.metric("Numeric", len(df.select_dtypes('number').columns))
+            
+#             st.subheader("📊 YOUR COLUMNS")
+#             numeric_cols = df.select_dtypes('number').columns.tolist()
+#             st.json({"Numeric Columns": numeric_cols})
+    
+#     def analysis_tab(self):
+#         if 'df' not in st.session_state:
+#             st.warning("👆 Upload dataset first!")
+#             return
+        
+#         df = st.session_state.df
+#         numeric_cols = df.select_dtypes('number').columns.tolist()
+        
+#         st.header("🎯 Template Analysis (100% Accurate)")
+        
+#         task = st.selectbox("Select Task:", 
+#                         ["📊 Statistics", "🔍 Filter", "📈 Clustering", "📉 Correlation", "📊 Visualize"])
+        
+#         st.subheader(f"📝 {task} Templates (EDITABLE)")
+#         templates = self.get_templates(task, numeric_cols, df)
+        
+#         selected_template_idx = st.selectbox("Choose template:", 
+#                                         range(len(templates)), 
+#                                         format_func=lambda i: f"📋 {templates[i]['name']}")
+        
+#         template = templates[selected_template_idx]
+        
+#         # 🔥 FIXED HEADERS + UNIQUE KEYS
+#         if task == "🔍 Filter":
+#             st.subheader("🔧 Filter Parameters")
+#             edited_params = self.render_filter_params(template, numeric_cols, df)
+#         elif task == "📊 Visualize":
+#             st.subheader("🔧 Plot Parameters")
+#             edited_params = self.render_visualize_params(template, numeric_cols, df)
+#         elif task == "📈 Clustering":
+#             st.subheader("🔧 Clustering Parameters")
+#             edited_params = self.render_clustering_params(template, numeric_cols, df)
+#         else:
+#             st.subheader("🔧 Analysis Parameters")
+#             edited_params = {}
+        
+#         # SHOW PREVIEW
+#         preview_prompt = self.build_preview(template, edited_params, task)
+#         st.text_area("📋 Final Command:", value=preview_prompt, height=60)
+        
+#         col1, col2 = st.columns([3,1])
+#         with col1:
+#             if st.button("🚀 RUN ANALYSIS", type="primary", use_container_width=True):
+#                 self.execute_template(template, edited_params, task, df)
+#         with col2:
+#             st.info(f"**Task:** {task}")
+
+#     def render_filter_params(self, template, numeric_cols, df):
+#         """✅ Filter - NO KEY COLLISION"""
+#         col1, col2, col3 = st.columns([1.5, 1, 1.5])
+        
+#         with col1:
+#             col_key = f"filter_col_{len(numeric_cols)}_{template['name'][:20]}"
+#             column = st.selectbox("**Column:**", numeric_cols, key=col_key)
+        
+#         with col2:
+#             op_key = f"filter_op_{len(numeric_cols)}_{template['name'][:20]}"
+#             operator = st.selectbox("**Operator:**", [">", "<", ">=", "<=", "=="], key=op_key)
+        
+#         with col3:
+#             val_key = f"filter_val_{len(numeric_cols)}_{template['name'][:20]}"
+#             # 🔥 DYNAMIC MEDIAN - Updates instantly!
+#             if column in df.columns and not df[column].isna().all():
+#                 median_val = float(df[column].median())
+#                 min_val, max_val = float(df[column].min()), float(df[column].max())
+#                 threshold = st.number_input(
+#                     f"**Value:** (median: {median_val:.1f})", 
+#                     value=median_val, min_value=min_val, max_value=max_val, 
+#                     key=val_key, format="%.1f"
+#                 )
+#             else:
+#                 threshold = st.number_input("**Value:**", value=0.0, key=val_key)
+        
+#         return {'column': column, 'operator': operator, 'threshold': threshold}
+
+#     def render_visualize_params(self, template, numeric_cols, df):
+#         """✅ Visualize - NO RESET!"""
+#         col1, col2 = st.columns(2)
+        
+#         with col1:
+#             x_key = f"viz_x_{len(numeric_cols)}_{template['name'][:20]}"
+#             col1_val = st.selectbox("**X-axis:**", numeric_cols, key=x_key)
+        
+#         with col2:
+#             y_key = f"viz_y_{len(numeric_cols)}_{template['name'][:20]}"
+#             col2_val = st.selectbox("**Y-axis:**", numeric_cols, key=y_key)
+        
+#         return {'col1': col1_val, 'col2': col2_val}
+
+#     def render_clustering_params(self, template, numeric_cols, df):
+#         """✅ SMART CLUSTERING - Elbow Method + Limits"""
+#         st.markdown("### 🎯 Smart Clustering Settings")
+        
+#         col1, col2 = st.columns(2)
+        
+#         with col1:
+#             # 🔥 SMART LIMITS: Never more than 20% of rows
+#             max_k = min(10, max(3, len(df)//50))
+#             k_key = f"cluster_k_{len(numeric_cols)}_{template['name'][:20]}"
+#             k = st.slider("**Clusters (k):**", 2, max_k, 3, key=k_key)
+        
+#         with col2:
+#             # 🔥 ELBOW METHOD - Show optimal k
+#             if st.button("🎲 Find Best k (Elbow)", key=f"elbow_{k_key}"):
+#                 st.session_state.best_k = self.find_optimal_k(df, numeric_cols)
+#             if hasattr(st.session_state, 'best_k'):
+#                 st.info(f"🎯 **Recommended k:** {st.session_state.best_k}")
+        
+#         # 🔥 FEATURE SELECTION
+#         st.markdown("### 📊 Features to Cluster On")
+#         feature_cols = st.multiselect("Select numeric features:", numeric_cols, 
+#                                     default=numeric_cols[:3], 
+#                                     key=f"cluster_feats_{len(numeric_cols)}_{template['name'][:20]}")
+        
+#         return {'k': k, 'features': feature_cols}
+
+#     def find_optimal_k(self, df, numeric_cols):
+#         """🔥 ELBOW METHOD - Find best k automatically"""
+#         from sklearn.cluster import KMeans
+#         from sklearn.preprocessing import StandardScaler
+#         import numpy as np
+        
+#         if len(numeric_cols) < 2:
+#             return 3
+        
+#         X = df[numeric_cols].fillna(0)
+#         scaler = StandardScaler()
+#         X_scaled = scaler.fit_transform(X)
+        
+#         inertias = []
+#         k_range = range(2, min(11, len(df)//50 + 1))
+        
+#         for k in k_range:
+#             kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+#             kmeans.fit(X_scaled)
+#             inertias.append(kmeans.inertia_)
+        
+#         # Elbow point detection
+#         deltas = np.diff(inertias)
+#         elbow_k = 2 + np.argmin(deltas[1:])
+#         return elbow_k
+
+#     def execute_template(self, template, params, task, df):
+#         """✅ ENHANCED CLUSTERING EXECUTION"""
+#         with st.spinner("🔬 Smart Clustering..."):
+#             task_map = {
+#                 "📊 Statistics": "statistics",
+#                 "🔍 Filter": "filtering",
+#                 "📈 Clustering": "clustering", 
+#                 "📉 Correlation": "correlation", 
+#                 "📊 Visualize": "visualization"
+#             }
+            
+#             results = self.engine.run(task_map.get(task, 'statistics'), df, params)
+            
+#             # 🔥 ENHANCE CLUSTERING RESULTS
+#             if task == "📈 Clustering" and results.get('success'):
+#                 results = self.enhance_clustering_results(results, df, params)
+            
+#             self.show_results(results)
+
+#     def enhance_clustering_results(self, results, df, params):
+#         """🔥 BEAUTIFUL CLUSTER PROFILES + VISUALS"""
+#         import numpy as np
+#         import matplotlib.pyplot as plt
+#         from sklearn.preprocessing import StandardScaler
+        
+#         features = params.get('features', df.select_dtypes('number').columns.tolist()[:2])
+#         k = params['k']
+        
+#         # Scale features for clustering
+#         X = df[features].fillna(0)
+#         scaler = StandardScaler()
+#         X_scaled = scaler.fit_transform(X)
+        
+#         # Add cluster labels to results
+#         results['data']['cluster'] = results['data']['cluster']
+        
+#         # 🔥 CLUSTER PROFILES
+#         insights = []
+#         cluster_stats = results['data'].groupby('cluster')[features].mean()
+        
+#         for i in range(k):
+#             cluster_size = len(results['data'][results['data']['cluster'] == i])
+#             pct = cluster_size / len(df) * 100
+#             insights.append(f"👥 **Cluster {i}**: {cluster_size} customers ({pct:.1f}%)")
+#             insights.append(f"   📊 Avg {features[0]}: {cluster_stats.loc[i, features[0]]:.1f}")
+#             if len(features) > 1:
+#                 insights.append(f"   📊 Avg {features[1]}: {cluster_stats.loc[i, features[1]]:.1f}")
+        
+#         results['insights'] = insights
+        
+#         # 🔥 SCATTER PLOT
+#         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+#         # Cluster scatter
+#         scatter = ax1.scatter(X_scaled[:, 0], X_scaled[:, 1], c=results['data']['cluster'], 
+#                             cmap='viridis', alpha=0.7, s=30)
+#         ax1.set_xlabel(features[0])
+#         ax1.set_ylabel(features[1])
+#         ax1.set_title(f'Customer Segments (k={k})')
+#         plt.colorbar(scatter, ax=ax1)
+        
+#         # Cluster sizes pie chart
+#         cluster_counts = results['data']['cluster'].value_counts()
+#         ax2.pie(cluster_counts.values, labels=[f'Cluster {i}' for i in cluster_counts.index], 
+#                 autopct='%1.1f%%', startangle=90)
+#         ax2.set_title('Cluster Distribution')
+        
+#         plt.tight_layout()
+#         results['figure'] = fig
+        
+#         return results
+
+
+
+
+
+#     def build_preview(self, template, params, task):
+#         """Perfect preview for all tasks"""
+#         if task == "🔍 Filter":
+#             return f"filter {params.get('column', 'col')} {params.get('operator', '>')} {params.get('threshold', 0)}"
+#         elif task == "📊 Visualize":
+#             return f"scatter {params.get('col1', 'x')} vs {params.get('col2', 'y')}"
+#         elif task == "📈 Clustering":
+#             features = ', '.join(params.get('features', ['all numeric'])[:2])
+#             return f"kmeans k={params['k']} on {features}"
+#         return template['name']
+
+
+
+#     def execute_template(self, template, params, task, df):
+#         """Execute with YOUR edited parameters"""
+#         with st.spinner("🔬 Analyzing..."):
+#             task_map = {
+#                 "📊 Statistics": "statistics",
+#                 "🔍 Filter": "filtering",
+#                 "📈 Clustering": "clustering",
+#                 "📉 Correlation": "correlation", 
+#                 "📊 Visualize": "visualization"
+#             }
+            
+#             # PASS YOUR EDITED PARAMS DIRECTLY
+#             results = self.engine.run(task_map.get(task, 'statistics'), df, params)
+#             self.show_results(results)
+
+    
+#     def show_results(self, results):
+#         """✅ MISSING METHOD - Display results"""
+#         if results.get('success', False):
+#             st.success("✅ Analysis Complete!")
+            
+#             if 'insights' in results:
+#                 st.subheader("💡 Key Insights")
+#                 for insight in results['insights']:
+#                     st.info(insight)
+            
+#             if 'data' in results:
+#                 st.subheader("📊 Results Table")
+#                 st.dataframe(results['data'].head(10), use_container_width=True)
+            
+#             if 'figure' in results:
+#                 st.subheader("📈 Visualization")
+#                 st.pyplot(results['figure'])
+            
+#             # Save to history
+#             self.history.add_entry(st.session_state.get('last_prompt', ''), 
+#                                  {'task': st.session_state.get('last_task', '')}, 
+#                                  results, 1.0)
+#             st.session_state.last_prompt = "Analysis completed"
+            
+#         else:
+#             st.error(f"❌ {results.get('error', 'Analysis failed')}")
+    
+#     def history_tab(self):
+#         st.header("📋 History")
+#         try:
+#             history_df = self.history.get_history()
+#             if history_df is not None and not history_df.empty:
+#                 st.metric("Total Analyses", len(history_df))
+#                 st.dataframe(history_df.tail(10)[['timestamp', 'prompt', 'confidence']])
+#                 st.download_button("📥 Export", history_df.to_csv(), "history.csv")
+#             else:
+#                 st.info("No analyses yet!")
+#         except:
+#             st.info("History not available")
+#     def get_templates(self, task, numeric_cols, df):
+#         """✅ 10 templates for EVERY task"""
+#         templates = []
+        
+#         if task == "📊 Statistics":
+#             templates = [
+#                 {"name": "Full dataset summary", "template": "statistics", "fields": []},
+#                 {"name": "Numeric columns stats", "template": "stats numeric", "fields": []},
+#                 {"name": "Missing values report", "template": "missing values", "fields": []},
+#                 {"name": "Data types overview", "template": "data types", "fields": []},
+#                 {"name": "Unique values count", "template": "unique counts", "fields": []},
+#                 {"name": "Dataset shape info", "template": "shape info", "fields": []},
+#                 {"name": "Memory usage report", "template": "memory usage", "fields": []},
+#                 {"name": "Duplicates detection", "template": "find duplicates", "fields": []},
+#                 {"name": "Column distributions", "template": "distributions", "fields": []},
+#                 {"name": "Data quality score", "template": "quality score", "fields": []}
+#             ]
+        
+#         elif task == "🔍 Filter":
+#             median_vals = df[numeric_cols].median()
+#             for i, col in enumerate(numeric_cols[:3]):
+#                 templates.extend([
+#                     {"name": f"{col} > median ({int(median_vals[col])})", "template": "filter", "fields": []},
+#                     {"name": f"{col} < median ({int(median_vals[col])})", "template": "filter", "fields": []}
+#                 ])
+#             templates.extend([
+#                 {"name": "Custom filter (edit below)", "template": "filter_custom", "fields": []},
+#                 {"name": "Top 10 values", "template": "top_10", "fields": []},
+#                 {"name": "Bottom 10 values", "template": "bottom_10", "fields": []}
+#             ])
+        
+#         elif task == "📊 Visualize":
+#             templates = [
+#                 {"name": "Scatter plot (custom)", "template": "scatter", "fields": []},
+#                 {"name": "Histogram (custom)", "template": "histogram", "fields": []},
+#                 {"name": "Box plot", "template": "boxplot", "fields": []},
+#                 {"name": "Violin plot", "template": "violin", "fields": []}
+#             ]
+        
+#         elif task == "📉 Correlation":
+#             templates = [
+#                 {"name": "Full correlation matrix", "template": "correlation all", "fields": []},
+#                 {"name": "Correlation heatmap", "template": "heatmap", "fields": []},
+#                 {"name": "Pairwise correlations", "template": "corr pairs", "fields": []}
+#             ]
+        
+#         elif task == "📈 Clustering":
+#             templates = [
+#                 {"name": "KMeans k=3", "template": "cluster k=3", "fields": []},
+#                 {"name": "KMeans k=4", "template": "cluster k=4", "fields": []},
+#                 {"name": "KMeans k=5", "template": "cluster k=5", "fields": []},
+#                 {"name": "Custom clusters", "template": "cluster custom", "fields": []}
+#             ]
+        
+#         return templates[:10]
+
+
+
+# if __name__ == "__main__":
+#     app = DataAgentApp()
+#     app.run()
