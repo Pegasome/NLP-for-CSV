@@ -4,6 +4,10 @@ import pandas as pd
 from modules.dataset_loader import load_dataset, load_sample_data
 from modules.history_manager import HistoryManager
 from modules.filters import FilterModule
+from modules.visualize import VisualizeModule
+from modules.clustering import ClusteringModule
+from modules.statistics import StatisticsModule
+from modules.correlation import CorrelationModule
 
 # ---------------------------------------------------------
 # App Config
@@ -25,9 +29,13 @@ st.markdown(
 # ---------------------------------------------------------
 class DataAgentApp:
     def __init__(self):
-        self.history = HistoryManager()
+        self.history_manager = HistoryManager()
         self.modules = {
-            "🔍 Filter": FilterModule()
+            "🔍 Filter": FilterModule(),
+            "📊 Visualization": VisualizeModule(),
+            " Clustering" : ClusteringModule(),
+            "Statistics" : StatisticsModule(),
+            "Correlation" : CorrelationModule()
             # Future modules plug here
         }
 
@@ -62,14 +70,21 @@ class DataAgentApp:
             use_sample = st.checkbox("🧪 Use Sample Data", value=True)
 
         if use_sample:
-            df = load_sample_data()
+            df, validation = load_sample_data()
             st.session_state.df = df
-            st.success("✅ Sample dataset loaded")
+            st.session_state.validation = validation
+            st.success(f"✅ Sample dataset loaded ({validation['status']})")
+
 
         elif uploaded_file:
-            df, _ = load_dataset(uploaded_file)
+            df, validation = load_dataset(uploaded_file)
             st.session_state.df = df
-            st.success(f"✅ {df.shape[0]:,} rows loaded")
+            st.session_state.validation = validation
+            st.success(
+                f"✅ {df.shape[0]:,} rows loaded | "
+                f"Quality: {validation['status']}"
+            )
+
 
         if "df" in st.session_state:
             df = st.session_state.df
@@ -78,7 +93,9 @@ class DataAgentApp:
             col1.metric("Rows", df.shape[0])
             col2.metric("Columns", df.shape[1])
             col3.metric("Numeric", len(df.select_dtypes("number").columns))
-
+            if "validation" in st.session_state:
+                with st.expander("📋 Dataset Quality Report"):
+                    st.json(st.session_state.validation)
             st.subheader("📌 Numeric Columns")
             st.json(df.select_dtypes("number").columns.tolist())
 
@@ -95,46 +112,29 @@ class DataAgentApp:
 
         task = st.selectbox(
             "Select Task",
-            list(self.modules.keys()) + [
-                "📊 Statistics",
-                "📈 Clustering",
-                "📉 Correlation",
-                "📊 Visualization"
-            ]
+            list(self.modules.keys()) 
         )
-
-        templates = self.get_templates(task)
-
-        if templates:
-            template_idx = st.selectbox(
-                "Choose Template",
-                range(len(templates)),
-                format_func=lambda i: f"📋 {templates[i]['name']}"
-            )
-            template = templates[template_idx]
-
-            if template.get("default_col"):
-                st.info(
-                    f"💡 Suggested: `{template['default_col']} "
-                    f"{template['default_op']} {template['default_val']}`"
-                )
-        else:
-            template = {}
 
         # -------------------------------------------------
         # Module UI
         # -------------------------------------------------
-        if task == "🔍 Filter":
+        if task in self.modules:
             params = self.modules[task].render_params(
                 numeric_cols=numeric_cols,
-                template_name=template.get("name", "custom"),
+                template_name="custom",
                 df=df
             )
-            preview = params.get("filter_text", "")
+
+            preview = (
+                params.get("filter_text")
+                or params.get("viz_text")
+                or ""
+            )
         else:
             st.warning("⏳ Module under development")
             params = {}
             preview = "Module not implemented yet"
+
 
         st.text_area(
             "📋 Final Command",
@@ -157,38 +157,14 @@ class DataAgentApp:
             st.info(f"**Active Task:** {task}")
 
     # -----------------------------------------------------
-    def get_templates(self, task):
-        if task == "🔍 Filter":
-            return [
-                {
-                    "name": "Young customers",
-                    "default_col": "age",
-                    "default_op": "<",
-                    "default_val": 35
-                },
-                {
-                    "name": "High income",
-                    "default_col": "income",
-                    "default_op": ">",
-                    "default_val": 60000
-                },
-                {
-                    "name": "Top spenders",
-                    "default_col": "sales",
-                    "default_op": ">",
-                    "default_val": 100
-                },
-                {
-                    "name": "Custom filter",
-                    "default_col": None
-                }
-            ]
-        return []
-
-    # -----------------------------------------------------
     def execute_task(self, task, df, params):
         if task in self.modules:
-            return self.modules[task].execute(df, params)
+            result = self.modules[task].execute(df, params)
+
+            # Save to history (future-proof)
+            self.history_manager.add(task, params, result)
+
+            return result
 
         return {
             "success": False,
@@ -204,6 +180,18 @@ class DataAgentApp:
                 st.subheader("💡 Insights")
                 for insight in results["insights"]:
                     st.info(insight)
+            
+            # Show elbow plot first (if exists)
+            if results.get("elbow_figure") is not None:
+                st.markdown("#### 📐 Optimal k (Elbow Method)")
+                st.pyplot(results["elbow_figure"])
+
+            # Show main clustering plot
+            if results.get("figure") is not None:
+                st.markdown("#### 📊 Clustering Result")
+                st.pyplot(results["figure"])
+
+
 
             if "data" in results:
                 st.subheader("📊 Result Preview")
@@ -217,7 +205,26 @@ class DataAgentApp:
     # -----------------------------------------------------
     def history_tab(self):
         st.header("📋 History")
-        st.info("Execution history will appear here")
+
+        history_df = self.history_manager.get_history()
+
+        if history_df.empty:
+            st.info("No analysis history yet. Run an analysis to see entries here.")
+            return
+
+        # Show latest first
+        history_df = history_df.sort_values(
+            by="timestamp", ascending=False
+        ).reset_index(drop=True)
+
+        st.dataframe(
+            history_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.caption("Shows recent analyses including task, prompt, and outcome.")
+
 
 
 # ---------------------------------------------------------

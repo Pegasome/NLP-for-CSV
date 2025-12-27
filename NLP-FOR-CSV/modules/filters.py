@@ -44,15 +44,15 @@ class FilterModule:
     # ---------------------------------------------------------
     @staticmethod
     def _parse_and_preview(df, filter_text):
-        """Parse NL filter into boolean mask"""
+        """Parse NL filter into boolean mask, supports strings & numbers (case-insensitive for strings)"""
 
         if not filter_text:
             return pd.Series(True, index=df.index)
 
-        # Normalize
         filter_text = filter_text.strip()
         df_cols = {c.lower(): c for c in df.columns}
 
+        # Split on AND / OR
         tokens = re.split(r"\s+(AND|OR)\s+", filter_text, flags=re.IGNORECASE)
 
         final_mask = None
@@ -60,45 +60,54 @@ class FilterModule:
 
         for token in tokens:
             token_upper = token.upper()
-
             if token_upper in ("AND", "OR"):
                 pending_logic = token_upper
                 continue
 
-            # ---- Parse condition ----
+            # Parse condition
             condition = token.strip()
 
-            match = re.match(
-                r"([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|<=|==|>|<|=)\s*([0-9.]+)",
-                condition
-            )
-
+            # Regex to handle numeric or string (quoted or unquoted)
+            match = re.match(r'([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|<=|==|>|<|=)\s*(.+)', condition)
             if not match:
                 raise ValueError(f"Invalid condition: '{condition}'")
 
-            col_raw, op, val = match.groups()
+            col_raw, op, val_raw = match.groups()
             col = df_cols.get(col_raw.lower())
-
             if col is None:
                 raise ValueError(f"Unknown column: '{col_raw}'")
 
-            val = float(val)
+            # Determine column type
+            if pd.api.types.is_numeric_dtype(df[col]):
+                try:
+                    val = float(val_raw)
+                except:
+                    raise ValueError(f"Invalid numeric value: '{val_raw}' for column '{col}'")
 
-            # ---- Apply operator ----
-            if op == ">":
-                mask = df[col] > val
-            elif op == "<":
-                mask = df[col] < val
-            elif op == ">=":
-                mask = df[col] >= val
-            elif op == "<=":
-                mask = df[col] <= val
-            elif op in ("=", "=="):
-                mask = df[col] == val
+                if op == ">":
+                    mask = df[col] > val
+                elif op == "<":
+                    mask = df[col] < val
+                elif op == ">=":
+                    mask = df[col] >= val
+                elif op == "<=":
+                    mask = df[col] <= val
+                elif op in ("=", "=="):
+                    mask = df[col] == val
+                else:
+                    raise ValueError(f"Unsupported operator: {op}")
+
             else:
-                raise ValueError(f"Unsupported operator: {op}")
+                # String column → case-insensitive
+                val = val_raw.strip('"').strip("'").lower()
+                if op in ("=", "=="):
+                    mask = df[col].str.lower() == val
+                elif op == "!=":
+                    mask = df[col].str.lower() != val
+                else:
+                    raise ValueError(f"Unsupported operator '{op}' for string column '{col}'")
 
-            # ---- Combine ----
+            # Combine masks
             if final_mask is None:
                 final_mask = mask
             else:

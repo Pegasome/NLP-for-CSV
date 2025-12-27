@@ -4,7 +4,7 @@ from typing import Dict, Tuple, List
 import warnings
 warnings.filterwarnings('ignore')
 
-def load_sample_data():
+def load_sample_data() -> Tuple[pd.DataFrame, Dict]:
     """Sample customer data for testing"""
     np.random.seed(42)
     n = 1000
@@ -19,7 +19,13 @@ def load_sample_data():
         'region': np.random.choice(['North', 'South', 'East', 'West'], n),
         'category': np.random.choice(['Electronics', 'Clothing', 'Books', 'Food'], n)
     }
-    return pd.DataFrame(data)
+
+    df = pd.DataFrame(data)
+
+    validation = validate_dataset(df)
+    validation["source"] = "sample"
+
+    return df, validation
 
 def load_dataset(file) -> Tuple[pd.DataFrame, Dict]:
     """Load CSV/Excel + return validation report"""
