@@ -1,10 +1,4 @@
-timestamp,task,prompt,success,confidence,insights
-2025-12-27 11:30:19,🔍 Filter,year == 2024 and Variable_code == H07,True,1.0,"✅ **139 / 55,620 rows** retained; 🔍 Filter: `year == 2024 and Variable_code == H07`; 📊 Numeric columns: 1"
-2025-12-27 11:50:11,🔍 Filter,Index > 2 and name = radio,True,1.0,✅ **1 / 100 rows** retained; 🔍 Filter: `Index > 2 and name = radio`; 📊 Numeric columns: 5
-2025-12-27 11:50:25,🔍 Filter,Index > 2 and name = radio,True,1.0,✅ **1 / 100 rows** retained; 🔍 Filter: `Index > 2 and name = radio`; 📊 Numeric columns: 5
-2025-12-27 11:50:39,🔍 Filter,Index < 2 and name = radio,True,1.0,✅ **0 / 100 rows** retained; 🔍 Filter: `Index < 2 and name = radio`; 📊 Numeric columns: 5
-2025-12-27 11:51:09,📊 Visualization,scatter index ,False,0.0,
-2025-12-27 11:51:18,📊 Visualization,scatter index price,True,1.0,📊 Visualization executed: `scatter index price`
-2025-12-27 11:51:47,📊 Visualization,scatter index description,True,1.0,📊 Visualization executed: `scatter index description`
-2025-12-27 12:00:30,Correlation,corr internalID,True,1.0,"✅ **Correlation analysis (4 × 4)**; 🔗 **Stock ↔ Index:** 0.115 (negative, weak); 🔗 **EAN ↔ Price:** 0.109 (positive, weak); 🔗 **EAN ↔ Index:** 0.087 (negative, weak); 🔗 **Price ↔ Index:** 0.078 (negative, weak); 🔗 **Stock ↔ Price:** 0.023 (negative, weak)"
-2025-12-27 12:01:41,Statistics,describe internal ID,True,1.0,✅ **Summary statistics generated for 1 columns**; 📈 **Internal ID:**;    • Mean: 49.34;    • Median: 48.00;    • Std Dev: 28.08;    • Coefficient of Variation: 0.57;    • Range: 3.00 – 99.00;    • Missing: 0 (0.0%)
+timestamp,task,prompt,hitl_approved,hitl_feedback,rows_retained
+2025-12-27 14:02:22,🔍 Filter,age > 60,True,bvnm,50
+2025-12-27 14:04:27,🔍 Filter,age = 60,False,changes done,11
+2025-12-27 14:05:51,🔍 Filter,age = 60,True,,11

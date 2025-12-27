@@ -150,57 +150,92 @@ class DataAgentApp:
                 type="primary",
                 use_container_width=True
             ):
-                results = self.execute_task(task, df, params)
-                self.show_results(results)
+                st.session_state["last_results"] = self.execute_task(task, df, params)
+
+        # ✅ Always render results if present
+        if "last_results" in st.session_state:
+            self.show_results(st.session_state["last_results"])
 
         with col2:
             st.info(f"**Active Task:** {task}")
 
-    # -----------------------------------------------------
+     # -----------------------------------------------------
     def execute_task(self, task, df, params):
-        if task in self.modules:
-            result = self.modules[task].execute(df, params)
+        result = self.modules[task].execute(df, params)
 
-            # Save to history (future-proof)
-            self.history_manager.add(task, params, result)
+        result["task"] = task
+        result["params"] = params
+        result["requires_hitl"] = task in ["🔍 Filter", "📦 Clustering"]
 
-            return result
-
-        return {
-            "success": False,
-            "error": f"{task} module not available"
-        }
+        return result
 
     # -----------------------------------------------------
     def show_results(self, results):
-        if results.get("success"):
-            st.success("✅ Analysis Complete")
-
-            if "insights" in results:
-                st.subheader("💡 Insights")
-                for insight in results["insights"]:
-                    st.info(insight)
-            
-            # Show elbow plot first (if exists)
-            if results.get("elbow_figure") is not None:
-                st.markdown("#### 📐 Optimal k (Elbow Method)")
-                st.pyplot(results["elbow_figure"])
-
-            # Show main clustering plot
-            if results.get("figure") is not None:
-                st.markdown("#### 📊 Clustering Result")
-                st.pyplot(results["figure"])
-
-
-
-            if "data" in results:
-                st.subheader("📊 Result Preview")
-                st.dataframe(
-                    results["data"].head(10),
-                    use_container_width=True
-                )
-        else:
+        if not results.get("success"):
             st.error(results.get("error", "Analysis failed"))
+            return
+
+        st.success("✅ Analysis Complete")
+
+        if "insights" in results:
+            st.subheader("💡 Insights")
+            for insight in results["insights"]:
+                st.info(insight)
+
+        if "data" not in results:
+            return
+
+        st.subheader("📊 Result Preview")
+
+        hitl_key = f"hitl_submitted_{results['task']}"
+
+        if hitl_key not in st.session_state:
+            st.session_state[hitl_key] = False
+
+        if results.get("requires_hitl"):
+            st.info(
+                "🧑‍💼 Human-in-the-Loop Review\n\n"
+                "Edits are for audit only. Analysis is NOT re-run."
+            )
+
+            edited_df = st.data_editor(
+                results["data"].head(50),
+                use_container_width=True
+            )
+
+            human_approved = st.radio(
+                "✅ Approve this data?",
+                ["Yes", "No"]
+            )
+
+            human_feedback = st.text_area(
+                "💬 Optional feedback",
+                placeholder="E.g., tighten filter, remove false positives…"
+            )
+
+            submit = st.button("Submit HITL Feedback")
+
+            if submit and not st.session_state[hitl_key]:
+                st.session_state[hitl_key] = True
+
+                prompt = (
+                    results["params"].get("filter_text")
+                    or results["params"].get("viz_text")
+                    or ""
+                )
+
+                self.history_manager.add_hitl_entry(
+                    task=results["task"],
+                    prompt=prompt,
+                    approved=(human_approved == "Yes"),
+                    feedback=human_feedback,
+                    rows_retained=len(edited_df)
+                )
+
+                st.success("✅ HITL decision saved to history")
+
+            if st.session_state[hitl_key]:
+                st.info("🔒 HITL already submitted for this analysis")
 
     # -----------------------------------------------------
     def history_tab(self):
@@ -209,22 +244,14 @@ class DataAgentApp:
         history_df = self.history_manager.get_history()
 
         if history_df.empty:
-            st.info("No analysis history yet. Run an analysis to see entries here.")
+            st.info("No history yet.")
             return
 
-        # Show latest first
         history_df = history_df.sort_values(
-            by="timestamp", ascending=False
-        ).reset_index(drop=True)
-
-        st.dataframe(
-            history_df,
-            use_container_width=True,
-            hide_index=True
+            "timestamp", ascending=False
         )
 
-        st.caption("Shows recent analyses including task, prompt, and outcome.")
-
+        st.dataframe(history_df, use_container_width=True)
 
 
 # ---------------------------------------------------------
